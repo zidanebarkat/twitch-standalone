@@ -16,6 +16,7 @@ DEFAULTS = {
     'output_mode': 'youtube',
     'backup_list': 'https://www.twitch.tv/xqc\nhttps://www.twitch.tv/summit1g\nhttps://www.twitch.tv/lirik',
     'bitrate': '192k',
+    'cookies': '',
 }
 config_path = '/tmp/panel_config.json'
 
@@ -54,15 +55,18 @@ def kill_ffmpeg():
 
 def get_hls_url(source):
     try:
-        r = subprocess.run(['yt-dlp', '-g', '--socket-timeout', '15',
-            '--retries', '2', source],
-            capture_output=True, text=True, timeout=120)
+        cmd = ['yt-dlp', '-g', '--socket-timeout', '15', '--retries', '2']
+        if os.path.exists('/cookies.txt'):
+            cmd += ['--cookies', '/cookies.txt']
+        cmd.append(source)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
-            wr(f'yt-dlp stderr: {r.stderr.strip()[-200:]}')
+            wr(f'yt-dlp stderr: {r.stderr.strip()[-500:]}')
             return None
         lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
         if not lines:
             wr('yt-dlp returned empty output')
+            wr(f'yt-dlp stderr: {r.stderr.strip()[-300:]}')
             return None
         for l in lines:
             if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
@@ -192,6 +196,16 @@ def update_config():
         if k in data:
             cfg[k] = data[k]
     save_config(cfg)
+    if cfg.get('cookies'):
+        try:
+            with open('/cookies.txt', 'w') as f:
+                f.write(cfg['cookies'])
+            wr('Cookies saved')
+        except Exception as e:
+            wr(f'Cookies save failed: {e}')
+    elif os.path.exists('/cookies.txt'):
+        os.remove('/cookies.txt')
+        wr('Cookies cleared')
     wr('Config saved')
     return jsonify({'ok': True, 'config': cfg})
 
@@ -316,6 +330,10 @@ h1 small{font-size:13px;color:#8b949e}
       <div class="form-group">
         <label>Backup Streamers (one per line)</label>
         <textarea name="backup_list" id="backup_list"></textarea>
+      </div>
+      <div class="form-group">
+        <label>YouTube Cookies (Netscape format) — needed for YouTube source</label>
+        <textarea name="cookies" id="cookies" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / TRUE 1234567890 VISITOR_INFO1_LIVE abc123..." style="min-height:60px;font-size:11px"></textarea>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px">
         <button type="button" class="btn btn-blue btn-sm" onclick="saveConfig()">💾 Save</button>
