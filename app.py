@@ -62,20 +62,26 @@ def get_hls_url(source):
         ['--format', 'best'],
         ['--format', 'worst'],
     ]
-    for fmt in format_tries:
-        try:
-            cmd = base + fmt + ['-g', source]
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if r.returncode == 0:
-                lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
-                if lines:
-                    for l in lines:
-                        if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
-                            return l
-                    return lines[-1]
-        except:
-            pass
-    wr('yt-dlp: all formats failed')
+    client_tries = [
+        [],
+        ['--extractor-args', 'youtube:client=android'],
+        ['--extractor-args', 'youtube:client=android_creator'],
+    ]
+    for ext in client_tries:
+        for fmt in format_tries:
+            try:
+                cmd = base + ext + fmt + ['-g', source]
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if r.returncode == 0:
+                    lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
+                    if lines:
+                        for l in lines:
+                            if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
+                                return l
+                        return lines[-1]
+            except:
+                pass
+    wr('yt-dlp: all formats/clients failed')
     return None
 
 def bg_loop(cfg):
