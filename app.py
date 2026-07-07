@@ -54,28 +54,28 @@ def kill_ffmpeg():
     ffmpeg_proc = None
 
 def get_hls_url(source):
-    try:
-        cmd = ['yt-dlp', '-g', '--socket-timeout', '15', '--retries', '2']
-        if os.path.exists('/cookies.txt'):
-            cmd += ['--cookies', '/cookies.txt']
-        cmd.append(source)
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if r.returncode != 0:
-            wr(f'yt-dlp stderr: {r.stderr.strip()[-500:]}')
-            return None
-        lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
-        if not lines:
-            wr('yt-dlp returned empty output')
-            wr(f'yt-dlp stderr: {r.stderr.strip()[-300:]}')
-            return None
-        for l in lines:
-            if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
-                return l
-        return lines[-1]
-    except subprocess.TimeoutExpired:
-        wr('yt-dlp timed out')
-    except Exception as e:
-        wr(f'yt-dlp error: {e}')
+    base = ['yt-dlp', '--socket-timeout', '15', '--retries', '3']
+    if os.path.exists('/cookies.txt'):
+        base += ['--cookies', '/cookies.txt']
+    format_tries = [
+        ['--format', 'bestvideo+bestaudio/best'],
+        ['--format', 'best'],
+        ['--format', 'worst'],
+    ]
+    for fmt in format_tries:
+        try:
+            cmd = base + fmt + ['-g', source]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if r.returncode == 0:
+                lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
+                if lines:
+                    for l in lines:
+                        if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
+                            return l
+                    return lines[-1]
+        except:
+            pass
+    wr('yt-dlp: all formats failed')
     return None
 
 def bg_loop(cfg):
