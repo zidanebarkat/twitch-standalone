@@ -188,6 +188,30 @@ def stop_stream():
         kill_ffmpeg()
     return jsonify({'ok': True})
 
+def convert_cookies(raw):
+    s = raw.strip()
+    if s.startswith('[') or s.startswith('{'):
+        try:
+            jars = json.loads(s)
+            if isinstance(jars, dict):
+                jars = [jars]
+            lines = ['# Netscape HTTP Cookie File']
+            for c in jars:
+                domain = c.get('domain', '')
+                if not domain.startswith('.'):
+                    domain = '.' + domain
+                flag = 'TRUE'
+                path = c.get('path', '/')
+                secure = 'TRUE' if c.get('secure', False) else 'FALSE'
+                exp = str(int(c.get('expirationDate', 9999999999)))
+                name = c.get('name', '')
+                val = c.get('value', '')
+                lines.append(f'{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{val}')
+            return '\n'.join(lines)
+        except Exception as e:
+            wr(f'Cookie JSON parse error: {e}')
+    return s
+
 @app.route('/config', methods=['POST'])
 def update_config():
     data = request.get_json(force=True)
@@ -198,8 +222,9 @@ def update_config():
     save_config(cfg)
     if cfg.get('cookies'):
         try:
+            netscape = convert_cookies(cfg['cookies'])
             with open('/cookies.txt', 'w') as f:
-                f.write(cfg['cookies'])
+                f.write(netscape)
             wr('Cookies saved')
         except Exception as e:
             wr(f'Cookies save failed: {e}')
