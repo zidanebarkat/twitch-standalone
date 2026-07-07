@@ -56,13 +56,20 @@ def get_hls_url(source):
     try:
         r = subprocess.run(['yt-dlp', '-g', '--socket-timeout', '15',
             '--retries', '2', source],
-            capture_output=True, text=True, timeout=60)
-        if r.returncode == 0:
-            lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
-            for l in lines:
-                if '.m3u8' in l or '.mp4' in l:
-                    return l
-            return lines[-1] if lines else None
+            capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            wr(f'yt-dlp stderr: {r.stderr.strip()[-200:]}')
+            return None
+        lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
+        if not lines:
+            wr('yt-dlp returned empty output')
+            return None
+        for l in lines:
+            if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
+                return l
+        return lines[-1]
+    except subprocess.TimeoutExpired:
+        wr('yt-dlp timed out')
     except Exception as e:
         wr(f'yt-dlp error: {e}')
     return None
@@ -213,7 +220,7 @@ def preview():
     cfg = load_config()
     hls = get_hls_url(cfg['source_url'])
     if not hls:
-        return jsonify({'ok': False, 'error': 'Source not live'}), 400
+        return jsonify({'ok': False, 'error': 'Cannot resolve URL — check logs'}), 400
     return jsonify({
         'ok': True,
         'hls': hls,
