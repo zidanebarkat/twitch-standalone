@@ -208,12 +208,27 @@ def resolve_source():
         return jsonify({'ok': True, 'hls': hls, 'source': cfg['source_url']})
     return jsonify({'ok': False, 'error': 'Not live'}), 400
 
+@app.route('/preview')
+def preview():
+    cfg = load_config()
+    hls = get_hls_url(cfg['source_url'])
+    if not hls:
+        return jsonify({'ok': False, 'error': 'Source not live'}), 400
+    return jsonify({
+        'ok': True,
+        'hls': hls,
+        'source': cfg['source_url'],
+        'output_mode': cfg.get('output_mode', 'youtube'),
+        'backup_count': len([l for l in cfg.get('backup_list','').split('\n') if l.strip()])
+    })
+
 HTML_PANEL = r'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Twitch Restream Panel</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d9}
@@ -312,6 +327,30 @@ h1 small{font-size:13px;color:#8b949e}
     <div class="log-box" id="logBox">Waiting...</div>
   </div>
 </div>
+
+<div class="card" style="margin-top:20px">
+  <h2>🎬 Live Preview</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div>
+      <label style="font-size:13px;color:#8b949e;display:block;margin-bottom:6px">Stream Preview</label>
+      <div style="background:#000;border-radius:6px;overflow:hidden;max-height:240px">
+        <video id="streamPreview" controls muted style="width:100%;max-height:240px;display:block"
+          poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect fill='%23161b22' width='320' height='180'/%3E%3Ctext x='50%25' y='50%25' fill='%238b949e' font-family='sans-serif' font-size='14' text-anchor='middle' dy='.3em'%3ELoad preview%3C/text%3E%3C/svg%3E">
+        </video>
+      </div>
+      <button class="btn btn-grey btn-sm" onclick="loadStreamPreview()" style="margin-top:8px">▶ Load Stream</button>
+      <span id="previewInfo" style="font-size:12px;color:#8b949e;margin-left:8px"></span>
+    </div>
+    <div>
+      <label style="font-size:13px;color:#8b949e;display:block;margin-bottom:6px">Source Info</label>
+      <div id="sourceInfo" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;height:240px;overflow-y:auto;font-size:12px;font-family:monospace;color:#8b949e">
+        Click "Preview" to load source info
+      </div>
+      <button class="btn btn-grey btn-sm" onclick="loadSourceInfo()" style="margin-top:8px">📡 Preview Source</button>
+      <span id="sourceCount" style="font-size:12px;color:#8b949e;margin-left:8px"></span>
+    </div>
+  </div>
+</div>
 </div>
 <script>
 function toggleMode() {
@@ -360,6 +399,41 @@ function stopStream() {
   fetch('/stop').then(r=>r.json()).then(d=>addLog(d.ok?'Stopped':'Error: '+d.error, d.ok?'warn':'err'));
 }
 function clearLogs() { document.getElementById('logBox').innerHTML = ''; }
+function loadStreamPreview() {
+  const vid = document.getElementById('streamPreview');
+  const info = document.getElementById('previewInfo');
+  info.textContent = 'Resolving...';
+  fetch('/preview').then(r=>r.json()).then(d=>{
+    if(!d.ok) { info.textContent = 'Error: '+d.error; return; }
+    info.textContent = d.source;
+    if (d.hls.includes('.m3u8')) {
+      if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+        vid.src = d.hls;
+      } else if (window.Hls) {
+        const h = new Hls();
+        h.loadSource(d.hls);
+        h.attachMedia(vid);
+      } else {
+        info.textContent = 'HLS not supported in this browser';
+        return;
+      }
+    } else {
+      vid.src = d.hls;
+    }
+    vid.play().catch(()=>{});
+    info.textContent = '▶ '+d.source+' — '+(d.backup_count||0)+' backups';
+  }).catch(e=>{ info.textContent = 'Failed'; });
+}
+function loadSourceInfo() {
+  const box = document.getElementById('sourceInfo');
+  const cnt = document.getElementById('sourceCount');
+  box.innerHTML = 'Resolving...';
+  fetch('/preview').then(r=>r.json()).then(d=>{
+    if(!d.ok) { box.innerHTML = 'Not live'; cnt.textContent = ''; return; }
+    cnt.textContent = '▶ Live';
+    box.innerHTML = 'Source: '+d.source+'\nHLS: '+d.hls+'\nOutput: '+d.output_mode+'\nBackups: '+(d.backup_count||0);
+  }).catch(e=>{ box.innerHTML = 'Failed: '+e; });
+}
 function addLog(msg,cls='info') {
   const box = document.getElementById('logBox');
   box.innerHTML += '<span class="'+cls+'">['+new Date().toLocaleTimeString()+'] '+msg+'</span>\n';
