@@ -258,7 +258,23 @@ def resolve_source():
     hls = get_hls_url(cfg['source_url'])
     if hls:
         return jsonify({'ok': True, 'hls': hls, 'source': cfg['source_url']})
-    return jsonify({'ok': False, 'error': 'Not live'}), 400
+    return jsonify({'ok': False, 'error': 'Not live or unreachable'}), 400
+
+@app.route('/formats')
+def list_formats():
+    cfg = load_config()
+    base = ['yt-dlp', '--socket-timeout', '15']
+    if os.path.exists('/cookies.txt'):
+        base += ['--cookies', '/cookies.txt']
+    try:
+        r = subprocess.run(base + ['--list-formats', cfg['source_url']],
+            capture_output=True, text=True, timeout=30)
+        out = (r.stdout + '\n' + r.stderr).strip()
+        if not out:
+            out = '(no output)'
+        return jsonify({'ok': True, 'formats': out[-1000:]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
 
 @app.route('/preview')
 def preview():
@@ -395,6 +411,7 @@ h1 small{font-size:13px;color:#8b949e}
         </video>
       </div>
       <button class="btn btn-grey btn-sm" onclick="loadStreamPreview()" style="margin-top:8px">▶ Load Stream</button>
+      <button class="btn btn-grey btn-sm" onclick="showFormats()" style="margin-top:8px">📋 Show Formats</button>
       <span id="previewInfo" style="font-size:12px;color:#8b949e;margin-left:8px"></span>
     </div>
     <div>
@@ -455,6 +472,11 @@ function stopStream() {
   fetch('/stop').then(r=>r.json()).then(d=>addLog(d.ok?'Stopped':'Error: '+d.error, d.ok?'warn':'err'));
 }
 function clearLogs() { document.getElementById('logBox').innerHTML = ''; }
+function showFormats() {
+  fetch('/formats').then(r=>r.json()).then(d=>{
+    addLog('Available formats:\n' + d.formats, d.ok?'ok':'err');
+  }).catch(e=>addLog('Formats fetch failed','err'));
+}
 function loadStreamPreview() {
   const vid = document.getElementById('streamPreview');
   const info = document.getElementById('previewInfo');
