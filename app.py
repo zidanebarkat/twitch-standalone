@@ -125,15 +125,20 @@ def bg_loop(cfg):
             wr(f'HLS: {hls[:80]}...')
             wr('Starting ffmpeg...')
 
+            if output.startswith('srt://'):
+                fmt = 'mpegts'
+            else:
+                fmt = 'flv'
             cmd = ['ffmpeg', '-nostdin', '-re',
                 '-timeout', '30000000',
                 '-analyzeduration', '50M', '-probesize', '50M',
                 '-fflags', '+discardcorrupt',
                 '-max_reload', '999',
+                '-protocol_whitelist', 'file,http,https,tcp,tls,crypto,srt,rtmp,rtmps',
                 '-i', hls,
                 '-map', '0:v', '-map', '0:a',
                 '-c:v', 'copy', '-c:a', 'copy',
-                '-f', 'flv', output]
+                '-f', fmt, output]
 
             try:
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
