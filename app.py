@@ -190,6 +190,7 @@ def start_stream():
             return jsonify({'ok': False, 'error': 'Already live'})
         cfg = load_config()
         if not cfg.get('source_url') or not cfg.get('output_url'):
+            wr(f'Missing URLs: source={bool(cfg.get("source_url"))} output={bool(cfg.get("output_url"))}')
             return jsonify({'ok': False, 'error': 'Missing source or output URL'})
         wr('=== GOING LIVE ===')
         stream_active = True
@@ -462,9 +463,10 @@ function readForm() {
   });
   return d;
 }
-function saveConfig() {
+function saveConfig(cb) {
   fetch('/config', {method:'POST', body:JSON.stringify(readForm()), headers:{'Content-Type':'application/json'}})
-    .then(r=>r.json()).then(d=>addLog('Config saved','ok')).catch(e=>addLog('Save failed','err'));
+    .then(r=>r.json()).then(d=>{ addLog('Config saved','ok'); if(cb) cb(); })
+    .catch(e=>{ addLog('Save failed','err'); if(cb) cb(); });
 }
 function testSource() {
   document.getElementById('testResult').textContent = 'Checking...';
@@ -472,13 +474,15 @@ function testSource() {
     document.getElementById('testResult').textContent = d.ok ? '✓ Live — HLS resolved' : '✗ Not live';
   }).catch(()=>document.getElementById('testResult').textContent='✗ Failed');
 }
-function goLive() {
-  saveConfig();
-  document.getElementById('btnGoLive').disabled = true;
-  addLog('Starting...','info');
+function doStart() {
   fetch('/start').then(r=>r.json()).then(d=>{
     if(!d.ok) { addLog('Error: '+d.error,'err'); document.getElementById('btnGoLive').disabled = false; }
   }).catch(e=>{ addLog('Start failed','err'); document.getElementById('btnGoLive').disabled = false; });
+}
+function goLive() {
+  document.getElementById('btnGoLive').disabled = true;
+  addLog('Starting...','info');
+  saveConfig(doStart);
 }
 function stopStream() {
   document.getElementById('btnStop').disabled = true;
