@@ -4,10 +4,9 @@ RUN apk add --no-cache \
     ffmpeg \
     python3 \
     py3-pip \
+    py3-flask \
     yt-dlp \
     bash
-
-RUN pip3 install flask
 
 COPY restream.sh /restream.sh
 COPY app.py /app.py
