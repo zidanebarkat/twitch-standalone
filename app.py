@@ -57,21 +57,22 @@ def get_hls_url(source):
     base = ['yt-dlp', '--socket-timeout', '15', '--retries', '3']
     if os.path.exists('/cookies.txt'):
         base += ['--cookies', '/cookies.txt']
-    format_tries = [
+    is_yt = 'youtube.com' in source or 'youtu.be' in source
+    formats = [
         ['--format', 'bestvideo+bestaudio/best'],
         ['--format', 'best'],
         ['--format', 'worst'],
     ]
-    client_tries = [
-        [],
-        ['--extractor-args', 'youtube:client=android'],
-        ['--extractor-args', 'youtube:client=android_creator'],
-    ]
-    for ext in client_tries:
-        for fmt in format_tries:
+    clients = [[]]
+    if is_yt:
+        clients += [['--extractor-args', 'youtube:client=android'],
+                    ['--extractor-args', 'youtube:client=android_creator']]
+    tried = 0
+    for ext in clients:
+        for fmt in formats:
             try:
                 cmd = base + ext + fmt + ['-g', source]
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                 if r.returncode == 0:
                     lines = [l.strip() for l in r.stdout.strip().split('\n') if l.strip()]
                     if lines:
@@ -79,9 +80,12 @@ def get_hls_url(source):
                             if '.m3u8' in l or '.mp4' in l or l.startswith('http'):
                                 return l
                         return lines[-1]
+                elif tried == 0:
+                    wr(f'yt-dlp first attempt stderr: {r.stderr.strip()[-300:]}')
+                tried += 1
             except:
-                pass
-    wr('yt-dlp: all formats/clients failed')
+                tried += 1
+    wr(f'yt-dlp: all {tried} attempts failed')
     return None
 
 def bg_loop(cfg):
