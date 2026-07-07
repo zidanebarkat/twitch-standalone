@@ -1,5 +1,6 @@
 #!/bin/bash
 YT_URL="${YT_URL:-https://www.twitch.tv/inoxtag}"
+
 OUTPUT_URL="${OUTPUT_URL:-}"
 
 BACKUP_STREAMERS=(
