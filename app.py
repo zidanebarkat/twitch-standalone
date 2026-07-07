@@ -67,6 +67,11 @@ def get_hls_url(source):
     if is_yt:
         clients += [['--extractor-args', 'youtube:client=android'],
                     ['--extractor-args', 'youtube:client=android_creator']]
+    if os.path.exists('/cookies.txt'):
+        sz = os.path.getsize('/cookies.txt')
+        wr(f'Cookies file: {sz} bytes')
+    else:
+        wr('No cookies file found')
     tried = 0
     for ext in clients:
         for fmt in formats:
